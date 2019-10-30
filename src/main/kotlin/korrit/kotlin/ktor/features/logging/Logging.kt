@@ -3,6 +3,7 @@ package korrit.kotlin.ktor.features.logging
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.ApplicationFeature
+import io.ktor.application.ApplicationStopped
 import io.ktor.application.call
 import io.ktor.application.featureOrNull
 import io.ktor.features.CallId
@@ -79,6 +80,9 @@ open class Logging(config: Configuration) {
     protected open fun install(pipeline: Application) {
         pipeline.environment.monitor.subscribe(RoutingCallStarted) {
             it.attributes.computeIfAbsent(routeKey) { it.route }
+        }
+        pipeline.environment.monitor.subscribe(ApplicationStopped) {
+            LOG.info("Server stopped")
         }
 
         pipeline.insertPhaseBefore(CallId.phase, startTimePhase)
