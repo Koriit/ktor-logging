@@ -1,0 +1,14 @@
+# Intellij
+.idea/
+*.iml
+*.iws
+
+# Gradle
+log/
+out/
+build/
+lib/
+.gradle/
+.DS_Store
+
+.kotlintest/

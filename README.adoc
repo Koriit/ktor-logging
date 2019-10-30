@@ -1,0 +1,37 @@
+= Ktor Logging
+
+Logging feature for ktor
+
+== Extended logging with logback's logstash encoder
+[source,kotlin]
+----
+override fun logPerformance(call: ApplicationCall) {
+    val duration = System.currentTimeMillis() - call.attributes[startTimeKey]
+    val route = call.attributes.getOrNull(routeKey)?.parent.toString()
+    val method = call.request.httpMethod.value
+
+    val requestInfo = mapOf(
+            "method" to method,
+            "protocol" to call.request.origin.version,
+            "url" to call.request.origin.run { "$scheme://$host:$port$uri" },
+            "api" to "$method $route",
+            "route" to route,
+            "remoteHost" to call.request.origin.remoteHost,
+            "contentType" to call.request.contentType().toString(),
+            "contentLength" to call.request.headers[HttpHeaders.ContentLength]?.toInt()
+    )
+
+    val responseInfo = mapOf(
+            "status" to call.response.status()?.value,
+            "contentType" to call.response.headers[HttpHeaders.ContentType],
+            "contentLength" to call.response.headers[HttpHeaders.ContentLength]?.toInt()
+    )
+
+    val additionalInfo = mapOf(
+            "request" to requestInfo,
+            "response" to responseInfo
+    )
+
+    LOG.info("Took {} ms for request to {} {}", value("duration", duration), method, requestInfo["url"], appendEntries(additionalInfo))
+}
+----
