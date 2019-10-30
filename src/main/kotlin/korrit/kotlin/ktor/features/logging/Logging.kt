@@ -9,12 +9,11 @@ import io.ktor.features.CallId
 import io.ktor.features.DoubleReceive
 import io.ktor.features.callId
 import io.ktor.features.origin
-import io.ktor.http.HttpHeaders
 import io.ktor.http.content.OutgoingContent
 import io.ktor.request.ApplicationReceivePipeline
 import io.ktor.request.RequestAlreadyConsumedException
-import io.ktor.request.contentType
 import io.ktor.request.httpMethod
+import io.ktor.request.path
 import io.ktor.request.receiveText
 import io.ktor.routing.Route
 import io.ktor.routing.Routing.Feature.RoutingCallStarted
@@ -41,6 +40,12 @@ open class Logging(config: Configuration) {
 
         fun filter(predicate: (ApplicationCall) -> Boolean) {
             filters.add(predicate)
+        }
+
+        fun filterPath(vararg paths: String) = filter {
+            it.request.path().run {
+                paths.any { startsWith(it) }
+            }
         }
     }
 
