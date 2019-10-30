@@ -105,16 +105,20 @@ open class Logging(config: Configuration) {
             pipeline.featureOrNull(DoubleReceive) ?: throw IllegalStateException("Logging payloads requires DoubleReceive feature to be installed")
 
             pipeline.receivePipeline.intercept(ApplicationReceivePipeline.Before) {
-                if (call.attributes.contains(requestLoggedKey)) {
-                    return@intercept
-                }
-                call.attributes.put(requestLoggedKey, true)
+                if (filters.isEmpty() || filters.any { it(call) }) {
+                    if (call.attributes.contains(requestLoggedKey)) {
+                        return@intercept
+                    }
+                    call.attributes.put(requestLoggedKey, true)
 
-                logRequest(call)
+                    logRequest(call)
+                }
             }
 
             pipeline.sendPipeline.intercept(responseLoggingPhase) {
-                logResponse(subject)
+                if (filters.isEmpty() || filters.any { it(call) }) {
+                    logResponse(subject)
+                }
             }
         }
     }
