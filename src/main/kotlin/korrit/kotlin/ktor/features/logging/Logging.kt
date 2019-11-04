@@ -63,8 +63,8 @@ open class Logging(config: Configuration) {
         try {
             LOG.info("Incoming request:\n${call.receiveText()}")
 
-        } catch (_: RequestAlreadyConsumedException) {
-            LOG.warn("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true")
+        } catch (e: RequestAlreadyConsumedException) {
+            LOG.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
         }
     }
 
@@ -78,6 +78,8 @@ open class Logging(config: Configuration) {
     }
 
     protected open fun install(pipeline: Application) {
+        pipeline.featureOrNull(CallId) ?: throw IllegalStateException("Logging requires CallId feature to be installed")
+
         pipeline.environment.monitor.subscribe(RoutingCallStarted) {
             it.attributes.computeIfAbsent(routeKey) { it.route }
         }
