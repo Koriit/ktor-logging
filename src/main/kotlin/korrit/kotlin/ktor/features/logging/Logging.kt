@@ -2,6 +2,7 @@ package korrit.kotlin.ktor.features.logging
 
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
+import io.ktor.application.ApplicationCallPipeline
 import io.ktor.application.ApplicationFeature
 import io.ktor.application.ApplicationStopped
 import io.ktor.application.call
@@ -11,11 +12,11 @@ import io.ktor.features.DoubleReceive
 import io.ktor.features.callId
 import io.ktor.features.origin
 import io.ktor.http.content.OutgoingContent
-import io.ktor.request.ApplicationReceivePipeline
 import io.ktor.request.RequestAlreadyConsumedException
 import io.ktor.request.httpMethod
+import io.ktor.request.httpVersion
 import io.ktor.request.path
-import io.ktor.request.receiveText
+import io.ktor.request.receive
 import io.ktor.routing.Route
 import io.ktor.routing.Routing.Feature.RoutingCallStarted
 import io.ktor.util.AttributeKey
@@ -28,8 +29,8 @@ import org.slf4j.Logger
 @KtorExperimentalAPI
 open class Logging(config: Configuration) {
 
-    val filters: List<(ApplicationCall) -> Boolean> = config.filters
-    val logPayloads: Boolean = config.logPayloads
+    protected open val filters: List<(ApplicationCall) -> Boolean> = config.filters
+    protected open val logPayloads: Boolean = config.logPayloads
 
     private val LOG: Logger = config.logger ?: logger {}
 
@@ -56,21 +57,40 @@ open class Logging(config: Configuration) {
         val method = call.request.httpMethod.value
         val url = call.request.origin.run { "$scheme://$host:$port$uri" }
 
-        LOG.info("{}: {} ms - {} {}", status, duration, method, url)
+        LOG.info("{} ms - {} - {} {}", duration, status, method, url)
     }
 
     protected open suspend fun logRequest(call: ApplicationCall) {
         try {
-            LOG.info("Incoming request:\n${call.receiveText()}")
+            val log = StringBuilder().apply {
+                appendln("Received request:")
+                appendln(call.request.origin.run { "${method.value} $scheme://$host:$port$uri $version" })
+                call.request.headers.forEach { header, values ->
+                    appendln("$header: ${values.firstOrNull()}")
+                }
+                appendln()
+                // Have to receive ByteArray for DoubleReceive to work
+                appendln(String(call.receive<ByteArray>()))
+            }
+            LOG.info(log.toString())
 
         } catch (e: RequestAlreadyConsumedException) {
             LOG.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
         }
     }
 
-    protected open fun logResponse(subject: Any) {
+    protected open fun logResponse(call: ApplicationCall, subject: Any) {
         if (subject is OutgoingContent.ByteArrayContent) {
-            LOG.info("Outgoing response:\n${String(subject.bytes())}")
+            val log = StringBuilder().apply {
+                appendln("Sent response:")
+                appendln("${call.request.httpVersion} ${call.response.status()}")
+                call.response.headers.allValues().forEach { header, values ->
+                    appendln("$header: ${values.firstOrNull()}")
+                }
+                appendln()
+                appendln(String(subject.bytes()))
+            }
+            LOG.info(log.toString())
 
         } else {
             LOG.warn("Cannot log response of type: ${subject.javaClass.simpleName}")
@@ -110,20 +130,15 @@ open class Logging(config: Configuration) {
         if (logPayloads) {
             pipeline.featureOrNull(DoubleReceive) ?: throw IllegalStateException("Logging payloads requires DoubleReceive feature to be installed")
 
-            pipeline.receivePipeline.intercept(ApplicationReceivePipeline.Before) {
+            pipeline.intercept(ApplicationCallPipeline.Monitoring) {
                 if (filters.isEmpty() || filters.any { it(call) }) {
-                    if (call.attributes.contains(requestLoggedKey)) {
-                        return@intercept
-                    }
-                    call.attributes.put(requestLoggedKey, true)
-
                     logRequest(call)
                 }
             }
 
             pipeline.sendPipeline.intercept(responseLoggingPhase) {
                 if (filters.isEmpty() || filters.any { it(call) }) {
-                    logResponse(subject)
+                    logResponse(call, subject)
                 }
             }
         }
@@ -134,7 +149,6 @@ open class Logging(config: Configuration) {
         override val key = AttributeKey<Logging>("Logging Feature")
 
         val startTimeKey = AttributeKey<Long>("Start Time")
-        val requestLoggedKey = AttributeKey<Boolean>("Request Logged")
         val routeKey = AttributeKey<Route>("Route")
 
         val startTimePhase = PipelinePhase("StartTime")
