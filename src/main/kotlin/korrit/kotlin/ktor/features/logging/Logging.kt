@@ -26,24 +26,45 @@ import koriit.kotlin.slf4j.logger
 import koriit.kotlin.slf4j.mdc.correlation.withCorrelation
 import org.slf4j.Logger
 
+/**
+ * Logging feature. Allows logging performance, requests and responses.
+ */
 @KtorExperimentalAPI
 open class Logging(config: Configuration) {
 
     protected open val filters: List<(ApplicationCall) -> Boolean> = config.filters
     protected open val logPayloads: Boolean = config.logPayloads
 
-    private val LOG: Logger = config.logger ?: logger {}
+    private val log: Logger = config.logger ?: logger {}
 
+    /**
+     * Logging feature config.
+     */
     open class Configuration {
         internal val filters = mutableListOf<(ApplicationCall) -> Boolean>()
 
+        /**
+         * Custom logger object.
+         */
         var logger: Logger? = null
+
+        /**
+         * Whether to log request/response payloads.
+         *
+         * WARN: payloads may contain sensitive data.
+         */
         var logPayloads: Boolean = false
 
+        /**
+         * Custom request filter.
+         */
         fun filter(predicate: (ApplicationCall) -> Boolean) {
             filters.add(predicate)
         }
 
+        /**
+         * Filter requests by path prefixes.
+         */
         fun filterPath(vararg paths: String) = filter {
             it.request.path().run {
                 paths.any { startsWith(it) }
@@ -57,7 +78,7 @@ open class Logging(config: Configuration) {
         val method = call.request.httpMethod.value
         val url = call.request.origin.run { "$scheme://$host:$port$uri" }
 
-        LOG.info("{} ms - {} - {} {}", duration, status, method, url)
+        log.info("{} ms - {} - {} {}", duration, status, method, url)
     }
 
     protected open suspend fun logRequest(call: ApplicationCall) {
@@ -72,10 +93,9 @@ open class Logging(config: Configuration) {
                 // Have to receive ByteArray for DoubleReceive to work
                 appendln(String(call.receive<ByteArray>()))
             }
-            LOG.info(log.toString())
-
+            this.log.info(log.toString())
         } catch (e: RequestAlreadyConsumedException) {
-            LOG.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
+            log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
         }
     }
 
@@ -90,13 +110,16 @@ open class Logging(config: Configuration) {
                 appendln()
                 appendln(String(subject.bytes()))
             }
-            LOG.info(log.toString())
+            this.log.info(log.toString())
 
         } else {
-            LOG.warn("Cannot log response of type: ${subject.javaClass.simpleName}")
+            log.warn("Cannot log response of type: ${subject.javaClass.simpleName}")
         }
     }
 
+    /**
+     * Feature installation.
+     */
     protected open fun install(pipeline: Application) {
         pipeline.featureOrNull(CallId) ?: throw IllegalStateException("Logging requires CallId feature to be installed")
 
@@ -104,7 +127,7 @@ open class Logging(config: Configuration) {
             it.attributes.computeIfAbsent(routeKey) { it.route }
         }
         pipeline.environment.monitor.subscribe(ApplicationStopped) {
-            LOG.info("Server stopped")
+            log.info("Server stopped")
         }
 
         pipeline.insertPhaseBefore(CallId.phase, startTimePhase)
@@ -117,7 +140,7 @@ open class Logging(config: Configuration) {
         pipeline.intercept(CallId.phase) {
             withCorrelation(call.callId!!) {
                 proceed()
-                LOG.debug("Finished call")
+                log.debug("Finished call")
             }
         }
 
@@ -144,14 +167,31 @@ open class Logging(config: Configuration) {
         }
     }
 
+    /**
+     * Feature installation.
+     */
     companion object Feature : ApplicationFeature<Application, Configuration, Logging> {
 
         override val key = AttributeKey<Logging>("Logging Feature")
 
+        /**
+         * Attribute key mapping to request duration start timestamp.
+         */
         val startTimeKey = AttributeKey<Long>("Start Time")
+
+        /**
+         * Attribute key mapping to matched [Route].
+         */
         val routeKey = AttributeKey<Route>("Route")
 
+        /**
+         * Phase when request duration starts counting.
+         */
         val startTimePhase = PipelinePhase("StartTime")
+
+        /**
+         * Phase when response is logged.
+         */
         val responseLoggingPhase = PipelinePhase("ResponseLogging")
 
         override fun install(pipeline: Application, configure: Configuration.() -> Unit): Logging {

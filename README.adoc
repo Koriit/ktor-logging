@@ -1,6 +1,14 @@
 = Ktor Logging
 
-Logging feature for ktor
+image:https://www.travis-ci.org/Koriit/ktor-logging.svg?branch=master["Build Status", link="https://www.travis-ci.org/Koriit/ktor-logging"]
+image:https://www.codefactor.io/repository/github/koriit/ktor-logging/badge[CodeFactor,link=https://www.codefactor.io/repository/github/koriit/ktor-logging]
+image:https://img.shields.io/badge/code%20style-%E2%9D%A4-FF4081.svg[ktlint,link=https://ktlint.github.io/]
+
+image:https://api.bintray.com/packages/koriit/kotlin/ktor-logging/images/download.svg[Download, link=https://bintray.com/koriit/kotlin/ktor-logging/_latestVersion]
+image:https://img.shields.io/github/license/koriit/ktor-logging[GitHub]
+
+
+Logging feature for ktor server.
 
 == Extended logging with logback's logstash encoder
 [source,kotlin]
@@ -32,6 +40,6 @@ override fun logPerformance(call: ApplicationCall) {
             "response" to responseInfo
     )
 
-    LOG.info("Took {} ms for request to {} {}", value("duration", duration), method, requestInfo["url"], appendEntries(additionalInfo))
+    log.info("{} ms - {} - {} {}", value("duration", duration), responseInfo["status"], method, requestInfo["url"], appendEntries(additionalInfo))
 }
 ----
