@@ -1,0 +1,26 @@
+build:
+  maxIssues: 0
+
+comments:
+  CommentOverPrivateFunction:
+    active: true
+  CommentOverPrivateProperty:
+    active: true
+  EndOfSentenceFormat:
+    active: true
+  UndocumentedPublicClass:
+    active: true
+  UndocumentedPublicFunction:
+    active: true
+  UndocumentedPublicProperty:
+    active: true
+
+complexity:
+  ComplexMethod:
+    ignoreSimpleWhenEntries: true
+
+formatting:
+  active: false
+
+style:
+  active: false
