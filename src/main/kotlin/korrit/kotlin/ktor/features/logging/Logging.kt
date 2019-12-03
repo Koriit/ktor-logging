@@ -100,21 +100,17 @@ open class Logging(config: Configuration) {
     }
 
     protected open fun logResponse(call: ApplicationCall, subject: Any) {
-        if (subject is OutgoingContent.ByteArrayContent) {
-            val log = StringBuilder().apply {
-                appendln("Sent response:")
-                appendln("${call.request.httpVersion} ${call.response.status()}")
-                call.response.headers.allValues().forEach { header, values ->
-                    appendln("$header: ${values.firstOrNull()}")
-                }
+        log.info(StringBuilder().apply {
+            appendln("Sent response:")
+            appendln("${call.request.httpVersion} ${call.response.status()}")
+            call.response.headers.allValues().forEach { header, values ->
+                appendln("$header: ${values.firstOrNull()}")
+            }
+            if (subject is OutgoingContent.ByteArrayContent) {
                 appendln()
                 appendln(String(subject.bytes()))
             }
-            this.log.info(log.toString())
-
-        } else {
-            log.warn("Cannot log response of type: ${subject.javaClass.simpleName}")
-        }
+        }.toString())
     }
 
     /**
