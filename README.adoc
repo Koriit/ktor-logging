@@ -10,24 +10,31 @@ image:https://img.shields.io/github/license/koriit/ktor-logging[GitHub]
 
 Logging feature for ktor server. Allows logging of performance, requests and responses.
 
+The feature correlates call logs and therefore installation of `CallId` is required.
+
 == Installation
 [source,kotlin]
 ----
-val logPayloads = ...
-// ...
 module {
-    if (logPayloads) {
-        install(DoubleReceive) {
-            receiveEntireContent = true
-        }
+    // install CallId...
+
+    install(DoubleReceive) {
+        receiveEntireContent = true
     }
 
-    install(LogstashLogging) {
-        this.logPayloads = logPayloads
+    install(Logging) {
+        logRequests = true
+        logResponses = true
+        logFullUrl = true
+        logBody = true
+        logHeaders = true
         filterPath("/api", "/version", "/openapi")
     }
 }
 ----
+
+== Filtering
+You can select which calls you want to log with `filter` and `filterPath` configuration functions.
 
 == Logging payloads
 Logging of request/response payloads requires installation of `DoubleReceive` feature with `receiveEntireContent = true`.
@@ -67,11 +74,12 @@ override fun logPerformance(call: ApplicationCall) {
     val duration = System.currentTimeMillis() - call.attributes[startTimeKey]
     val route = call.attributes.getOrNull(routeKey)?.parent.toString()
     val method = call.request.httpMethod.value
+    val requestURI = if (logFullUrl) call.request.origin.uri else call.request.path()
 
     val requestInfo = mapOf(
             "method" to method,
             "protocol" to call.request.origin.version,
-            "url" to call.request.origin.run { "$scheme://$host:$port$uri" },
+            "url" to call.request.origin.run { "$scheme://$host:$port$requestURI" },
             "api" to "$method $route",
             "route" to route,
             "remoteHost" to call.request.origin.remoteHost,

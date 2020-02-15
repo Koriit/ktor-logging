@@ -33,7 +33,11 @@ import org.slf4j.Logger
 open class Logging(config: Configuration) {
 
     protected open val filters: List<(ApplicationCall) -> Boolean> = config.filters
-    protected open val logPayloads: Boolean = config.logPayloads
+    protected open val logRequests = config.logRequests
+    protected open val logResponses = config.logResponses
+    protected open val logFullUrl = config.logFullUrl
+    protected open val logHeaders = config.logHeaders
+    protected open val logBody = config.logBody
 
     private val log: Logger = config.logger ?: logger {}
 
@@ -49,26 +53,54 @@ open class Logging(config: Configuration) {
         var logger: Logger? = null
 
         /**
+         * Whether to log request.
+         *
+         * WARN: request logs may contain sensitive data.
+         */
+        var logRequests = false
+
+        /**
+         * Whether to log responses.
+         *
+         * WARN: responses logs may contain sensitive data.
+         */
+        var logResponses = false
+
+        /**
+         * Whether to log full request/response urls.
+         *
+         * WARN: url queries may contain sensitive data.
+         */
+        var logFullUrl = false
+
+        /**
+         * Whether to log request/response headers.
+         *
+         * WARN: headers may contain sensitive data.
+         */
+        var logHeaders = false
+
+        /**
          * Whether to log request/response payloads.
          *
          * WARN: payloads may contain sensitive data.
          */
-        var logPayloads: Boolean = false
+        var logBody = false
 
         /**
-         * Custom request filter.
+         * Custom request filter. Logs only if any filter returns true.
          */
         fun filter(predicate: (ApplicationCall) -> Boolean) {
             filters.add(predicate)
         }
 
         /**
-         * Filter requests by path prefixes.
+         * Filter requests by path prefixes. Logs only for given paths.
          */
-        fun filterPath(vararg paths: String) = filter {
-            it.request.path().run {
-                paths.any { startsWith(it) }
-            }
+        fun filterPath(vararg paths: String) = filter { call ->
+            val requestPath = call.request.path().removePrefix(call.application.environment.rootPath)
+
+            paths.any { requestPath == it || requestPath.startsWith(it) }
         }
     }
 
@@ -76,41 +108,60 @@ open class Logging(config: Configuration) {
         val duration = System.currentTimeMillis() - call.attributes[startTimeKey]
         val status = call.response.status()?.value
         val method = call.request.httpMethod.value
-        val url = call.request.origin.run { "$scheme://$host:$port$uri" }
+        val requestURI = if (logFullUrl) call.request.origin.uri else call.request.path()
+        val url = call.request.origin.run { "$scheme://$host:$port$requestURI" }
 
         log.info("{} ms - {} - {} {}", duration, status, method, url)
     }
 
     protected open suspend fun logRequest(call: ApplicationCall) {
-        try {
-            val log = StringBuilder().apply {
-                appendln("Received request:")
-                appendln(call.request.origin.run { "${method.value} $scheme://$host:$port$uri $version" })
+        log.info(StringBuilder().apply {
+            appendln("Received request:")
+            val requestURI = if (logFullUrl) call.request.origin.uri else call.request.path()
+            appendln(call.request.origin.run { "${method.value} $scheme://$host:$port$requestURI $version" })
+
+            if (logHeaders) {
                 call.request.headers.forEach { header, values ->
                     appendln("$header: ${values.firstOrNull()}")
                 }
-                appendln()
-                // Have to receive ByteArray for DoubleReceive to work
-                appendln(String(call.receive<ByteArray>()))
             }
-            this.log.info(log.toString())
-        } catch (e: RequestAlreadyConsumedException) {
-            log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
-        }
+
+            if (logBody) {
+                try {
+                    // new line before body as in HTTP request
+                    appendln()
+                    // have to receive ByteArray for DoubleReceive to work
+                    // new line after body because in the log there might be additional info after "log message"
+                    appendln(String(call.receive<ByteArray>()))
+                } catch (e: RequestAlreadyConsumedException) {
+                    log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
+                }
+            }
+        }.toString())
     }
 
     protected open fun logResponse(call: ApplicationCall, subject: Any) {
         log.info(StringBuilder().apply {
             appendln("Sent response:")
             appendln("${call.request.httpVersion} ${call.response.status()}")
-            call.response.headers.allValues().forEach { header, values ->
-                appendln("$header: ${values.firstOrNull()}")
+            if (logHeaders) {
+                call.response.headers.allValues().forEach { header, values ->
+                    appendln("$header: ${values.firstOrNull()}")
+                }
             }
-            if (subject is OutgoingContent.ByteArrayContent) {
+            if (logBody && subject is OutgoingContent.ByteArrayContent) {
+                // new line before body as in HTTP response
                 appendln()
+                // new line after body because in the log there might be additional info after "log message"
                 appendln(String(subject.bytes()))
             }
+            // do not log warning if  subject is not OutgoingContent.ByteArrayContent
+            // as we could possibly spam warnings without any option to disable them
         }.toString())
+    }
+
+    protected open fun shouldLog(call: ApplicationCall): Boolean {
+        return filters.isEmpty() || filters.any { it(call) }
     }
 
     /**
@@ -127,8 +178,6 @@ open class Logging(config: Configuration) {
         }
 
         pipeline.insertPhaseBefore(CallId.phase, startTimePhase)
-        pipeline.sendPipeline.addPhase(responseLoggingPhase)
-
         pipeline.intercept(startTimePhase) {
             call.attributes.put(startTimeKey, System.currentTimeMillis())
         }
@@ -140,23 +189,33 @@ open class Logging(config: Configuration) {
             }
         }
 
+        pipeline.sendPipeline.addPhase(responseLoggingPhase)
         pipeline.sendPipeline.intercept(responseLoggingPhase) {
-            if (filters.isEmpty() || filters.any { it(call) }) {
+            if (shouldLog(call)) {
                 logPerformance(call)
             }
         }
 
-        if (logPayloads) {
-            pipeline.featureOrNull(DoubleReceive) ?: throw IllegalStateException("Logging payloads requires DoubleReceive feature to be installed")
+        if (logRequests || logResponses) {
+            if (logBody && pipeline.featureOrNull(DoubleReceive) == null) {
+                throw IllegalStateException("Logging payloads requires DoubleReceive feature to be installed")
+            }
+            if (!logBody && !logHeaders && !logFullUrl) {
+                log.warn("You have enabled logging of requests/responses but body, full url and headers logging is disabled and there is no information gain")
+            }
+        }
 
+        if (logRequests) {
             pipeline.intercept(ApplicationCallPipeline.Monitoring) {
-                if (filters.isEmpty() || filters.any { it(call) }) {
+                if (shouldLog(call)) {
                     logRequest(call)
                 }
             }
+        }
 
+        if (logResponses) {
             pipeline.sendPipeline.intercept(responseLoggingPhase) {
-                if (filters.isEmpty() || filters.any { it(call) }) {
+                if (shouldLog(call)) {
                     logResponse(call, subject)
                 }
             }

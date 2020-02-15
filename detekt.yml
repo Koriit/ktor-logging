@@ -16,8 +16,8 @@ comments:
     active: true
 
 complexity:
-  ComplexMethod:
-    ignoreSimpleWhenEntries: true
+  NestedBlockDepth:
+    threshold: 5 # kind of specific to the style of log content building
 
 formatting:
   active: false
