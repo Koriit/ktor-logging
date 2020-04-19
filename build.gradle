@@ -3,14 +3,14 @@
 /////////////
 
 plugins {
-    id "org.jetbrains.kotlin.jvm" version "1.3.61"
-    id "com.jfrog.bintray" version "1.8.4"
+    id "org.jetbrains.kotlin.jvm" version "1.3.72"
+    id "com.jfrog.bintray" version "1.8.5"
     id "java-library"
     id "maven-publish"
     id "jacoco"
     id "org.jlleitschuh.gradle.ktlint" version "9.2.1"
-    id "io.gitlab.arturbosch.detekt" version "1.5.1"
-    id "com.github.ben-manes.versions" version "0.27.0"
+    id "io.gitlab.arturbosch.detekt" version "1.7.4"
+    id "com.github.ben-manes.versions" version "0.28.0"
 }
 
 //////////////////
@@ -22,8 +22,8 @@ repositories {
 }
 
 ext {
-    ktorVersion = "1.3.1"
-    jacksonVersion = "2.10.2"
+    ktorVersion = "1.3.2"
+    jacksonVersion = "2.10.3"
 }
 
 dependencies {
@@ -34,13 +34,13 @@ dependencies {
     implementation "io.ktor:ktor-server-core:$ktorVersion"
 
     // LOGGING
-    implementation "koriit.kotlin:slf4j-utils:0.6.0"
+    implementation "koriit.kotlin:slf4j-utils:0.6.1"
 
     // TESTING
     testImplementation "io.ktor:ktor-server-test-host:$ktorVersion"
     testImplementation "io.mockk:mockk:1.9.3"
-    testImplementation "koriit.kotlin:slf4j-utils-logback:0.2.3"
-    testImplementation "org.junit.jupiter:junit-jupiter:5.6.0"
+    testImplementation "koriit.kotlin:slf4j-utils-logback:0.2.4"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.6.1"
 }
 
 /////////////
@@ -48,9 +48,8 @@ dependencies {
 /////////////
 
 def isNonStable = { String version ->
-    def stableKeyword = ['RELEASE', 'FINAL', 'GA'].any { it -> version.toUpperCase().contains(it) }
-    def regex = /^[0-9,.v-]+(-r)?$/
-    return !stableKeyword && !(version ==~ regex)
+    def regex = /^[0-9,.v-]+((-r)|(release)|(final)|(ga))?$/
+    return !(version.toLowerCase() ==~ regex)
 }
 
 dependencyUpdates {
@@ -103,7 +102,7 @@ detekt {
 
 test {
     useJUnitPlatform {
-        excludeTags project.hasProperty("fast") ? "Slow" : "None"
+        excludeTags hasProperty("fast") ? "Slow" : "None"
     }
 }
 
@@ -111,7 +110,7 @@ jacoco {
     toolVersion = "0.8.4"
 }
 
-if (!project.hasProperty("fast")) test.finalizedBy(jacocoTestReport)
+if (!hasProperty("fast")) test.finalizedBy(jacocoTestReport)
 
 /////////////
 // PUBLISH //
