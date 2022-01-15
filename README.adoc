@@ -1,12 +1,13 @@
 = Ktor Logging
 
-image:https://www.travis-ci.org/Koriit/ktor-logging.svg?branch=master["Build Status", link="https://www.travis-ci.org/Koriit/ktor-logging"]
+image:https://github.com/Koriit/ktor-logging/actions/workflows/build.yaml/badge.svg[Build, link="https://github.com/Koriit/ktor-logging/actions/workflows/build.yaml"]
 image:https://www.codefactor.io/repository/github/koriit/ktor-logging/badge[CodeFactor,link=https://www.codefactor.io/repository/github/koriit/ktor-logging]
 image:https://img.shields.io/badge/code%20style-%E2%9D%A4-FF4081.svg[ktlint,link=https://ktlint.github.io/]
 
-image:https://api.bintray.com/packages/koriit/kotlin/ktor-logging/images/download.svg[Download, link=https://bintray.com/koriit/kotlin/ktor-logging/_latestVersion]
+image:https://img.shields.io/maven-central/v/com.koriit.kotlin/ktor-logging.svg?label=Maven%20Central[Maven Central, link="https://search.maven.org/search?q=g:%22com.koriit.kotlin%22%20AND%20a:%22ktor-logging%22"]
 image:https://img.shields.io/github/license/koriit/ktor-logging[GitHub]
 
+WARNING: From version 0.4.0 all package names have been renamed to match new artifact group id.
 
 Logging feature for ktor server. Allows logging of performance, requests and responses.
 

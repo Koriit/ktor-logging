@@ -3,10 +3,10 @@
 /////////////
 
 plugins {
-    id "com.jfrog.bintray" version "1.8.5"
     id "org.jetbrains.kotlin.jvm" version "1.6.10"
     id "java-library"
     id "maven-publish"
+    id "signing"
     id "jacoco"
     id "org.jlleitschuh.gradle.ktlint" version "10.2.1"
     id "io.gitlab.arturbosch.detekt" version "1.19.0"
@@ -112,26 +112,19 @@ if (!hasProperty("fast")) test.finalizedBy(jacocoTestReport)
 /////////////
 // PUBLISH //
 /////////////
-
-task sourcesJar(type: Jar) {
-    from sourceSets.main.allSource
-    archiveClassifier = "sources"
-}
-
-task javadocJar(type: Jar) {
-    from javadoc
-    archiveClassifier = "javadoc"
+java {
+    withJavadocJar()
+    withSourcesJar()
 }
 
 publishing {
     publications {
-        bintrayMaven(MavenPublication) {
+        mavenJava(MavenPublication) {
             groupId = project.group
             artifactId = projectName
             version = project.version
             from components.java
-            artifact sourcesJar
-            artifact javadocJar
+
             pom {
                 name = "Ktor Logging"
                 description = "Ktor Logging feature for APIs"
@@ -142,25 +135,43 @@ publishing {
                         url = "https://github.com/Koriit/ktor-logging/blob/master/LICENSE"
                     }
                 }
+                developers {
+                    developer {
+                        id = 'koriit'
+                        name = 'Aleksander Stelmaczonek'
+                        email = 'al.stelmaczonek@gmail.com'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:git://github.com/Koriit/ktor-logging.git'
+                    developerConnection = 'scm:git:ssh://github.com/Koriit/ktor-logging.git'
+                    url = 'https://github.com/Koriit/ktor-logging'
+                }
             }
         }
     }
-}
 
-bintray {
-    user = System.getProperty("bintray.user")
-    key = System.getProperty("bintray.key")
-    publications = ["bintrayMaven"]
+    repositories {
+        maven {
+            credentials {
+                username = findProperty("sonatype.user") ?: System.getenv("SONATYPE_USERNAME")
+                password = findProperty("sonatype.password")?: System.getenv("SONATYPE_PASSWORD")
+            }
 
-    pkg {
-        repo = "kotlin"
-        name = "ktor-logging"
-        version {
-            name = project.version
-            released = new Date()
+            def releasesRepoUrl = 'https://s01.oss.sonatype.org/service/local/staging/deploy/maven2/'
+            def snapshotsRepoUrl = "https://s01.oss.sonatype.org/content/repositories/snapshots/"
+            url = version.endsWith('SNAPSHOT') ? snapshotsRepoUrl : releasesRepoUrl
         }
     }
 }
+
+signing {
+    def signingKey = findProperty("signing.key") ?: System.getenv("PGP_SIGNING_KEY")
+    def signingPassword = findProperty("signing.password") ?: System.getenv("PGP_SIGNING_PASSWORD")
+    useInMemoryPgpKeys(signingKey, signingPassword)
+    sign publishing.publications.mavenJava
+}
+
 
 ///////////
 // OTHER //
