@@ -1,5 +1,7 @@
 package korrit.kotlin.ktor.features.logging
 
+import com.koriit.kotlin.slf4j.logger
+import com.koriit.kotlin.slf4j.mdc.correlation.correlateThread
 import io.ktor.application.call
 import io.ktor.application.install
 import io.ktor.features.CallId
@@ -18,14 +20,12 @@ import io.ktor.server.testing.handleRequest
 import io.ktor.server.testing.setBody
 import io.mockk.spyk
 import io.mockk.verify
-import java.lang.IllegalStateException
-import java.util.UUID
-import koriit.kotlin.slf4j.logger
-import koriit.kotlin.slf4j.mdc.correlation.correlateThread
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.lang.IllegalStateException
+import java.util.UUID
 
 internal class LoggingTest {
 
@@ -192,9 +192,11 @@ internal class LoggingTest {
         val payloads = mutableListOf<String>()
 
         verify(exactly = 2) {
-            testLogger.info(withArg {
-                payloads.add(it)
-            })
+            testLogger.info(
+                withArg {
+                    payloads.add(it)
+                }
+            )
         }
         verify(exactly = 1) {
             testLogger.info(any(), *anyVararg())
@@ -232,9 +234,11 @@ internal class LoggingTest {
         val payloads = mutableListOf<String>()
 
         verify(exactly = 2) {
-            testLogger.info(withArg {
-                payloads.add(it)
-            })
+            testLogger.info(
+                withArg {
+                    payloads.add(it)
+                }
+            )
         }
         verify(exactly = 1) {
             testLogger.info(any(), *anyVararg())
@@ -281,36 +285,38 @@ internal class LoggingTest {
         rootPath: String = "",
         configureLogging: Logging.Configuration.() -> Unit = {}
     ): TestApplicationEngine {
-        return TestApplicationEngine(applicationEngineEnvironment {
-            this.rootPath = rootPath
-            module {
-                if (installCallId) {
-                    install(CallId) {
-                        header(HttpHeaders.XRequestId)
-                        generate { UUID.randomUUID().toString() }
-                        verify { it.isNotBlank() }
+        return TestApplicationEngine(
+            applicationEngineEnvironment {
+                this.rootPath = rootPath
+                module {
+                    if (installCallId) {
+                        install(CallId) {
+                            header(HttpHeaders.XRequestId)
+                            generate { UUID.randomUUID().toString() }
+                            verify { it.isNotBlank() }
+                        }
                     }
-                }
-                if (installDoubleReceive) {
-                    install(DoubleReceive) {
-                        receiveEntireContent = true
+                    if (installDoubleReceive) {
+                        install(DoubleReceive) {
+                            receiveEntireContent = true
+                        }
                     }
-                }
 
-                install(Logging) {
-                    logger = testLogger
-                    configureLogging()
-                }
-
-                routing {
-                    get("/api") {
-                        call.respond("OK")
+                    install(Logging) {
+                        logger = testLogger
+                        configureLogging()
                     }
-                    post("/api") {
-                        call.respond(call.receiveText())
+
+                    routing {
+                        get("/api") {
+                            call.respond("OK")
+                        }
+                        post("/api") {
+                            call.respond(call.receiveText())
+                        }
                     }
                 }
             }
-        })
+        )
     }
 }

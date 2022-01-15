@@ -1,5 +1,7 @@
 package korrit.kotlin.ktor.features.logging
 
+import com.koriit.kotlin.slf4j.logger
+import com.koriit.kotlin.slf4j.mdc.correlation.withCorrelation
 import io.ktor.application.Application
 import io.ktor.application.ApplicationCall
 import io.ktor.application.ApplicationCallPipeline
@@ -20,16 +22,12 @@ import io.ktor.request.receive
 import io.ktor.routing.Route
 import io.ktor.routing.Routing.Feature.RoutingCallStarted
 import io.ktor.util.AttributeKey
-import io.ktor.util.KtorExperimentalAPI
 import io.ktor.util.pipeline.PipelinePhase
-import koriit.kotlin.slf4j.logger
-import koriit.kotlin.slf4j.mdc.correlation.withCorrelation
 import org.slf4j.Logger
 
 /**
  * Logging feature. Allows logging performance, requests and responses.
  */
-@KtorExperimentalAPI
 open class Logging(config: Configuration) {
 
     protected open val filters: List<(ApplicationCall) -> Boolean> = config.filters
@@ -115,49 +113,53 @@ open class Logging(config: Configuration) {
     }
 
     protected open suspend fun logRequest(call: ApplicationCall) {
-        log.info(StringBuilder().apply {
-            appendln("Received request:")
-            val requestURI = if (logFullUrl) call.request.origin.uri else call.request.path()
-            appendln(call.request.origin.run { "${method.value} $scheme://$host:$port$requestURI $version" })
+        log.info(
+            StringBuilder().apply {
+                appendLine("Received request:")
+                val requestURI = if (logFullUrl) call.request.origin.uri else call.request.path()
+                appendLine(call.request.origin.run { "${method.value} $scheme://$host:$port$requestURI $version" })
 
-            if (logHeaders) {
-                call.request.headers.forEach { header, values ->
-                    appendln("$header: ${values.firstOrNull()}")
+                if (logHeaders) {
+                    call.request.headers.forEach { header, values ->
+                        appendLine("$header: ${values.firstOrNull()}")
+                    }
                 }
-            }
 
-            if (logBody) {
-                try {
-                    // new line before body as in HTTP request
-                    appendln()
-                    // have to receive ByteArray for DoubleReceive to work
-                    // new line after body because in the log there might be additional info after "log message"
-                    appendln(String(call.receive<ByteArray>()))
-                } catch (e: RequestAlreadyConsumedException) {
-                    log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
+                if (logBody) {
+                    try {
+                        // new line before body as in HTTP request
+                        appendLine()
+                        // have to receive ByteArray for DoubleReceive to work
+                        // new line after body because in the log there might be additional info after "log message"
+                        appendLine(String(call.receive<ByteArray>()))
+                    } catch (e: RequestAlreadyConsumedException) {
+                        log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
+                    }
                 }
-            }
-        }.toString())
+            }.toString()
+        )
     }
 
     protected open fun logResponse(call: ApplicationCall, subject: Any) {
-        log.info(StringBuilder().apply {
-            appendln("Sent response:")
-            appendln("${call.request.httpVersion} ${call.response.status()}")
-            if (logHeaders) {
-                call.response.headers.allValues().forEach { header, values ->
-                    appendln("$header: ${values.firstOrNull()}")
+        log.info(
+            StringBuilder().apply {
+                appendLine("Sent response:")
+                appendLine("${call.request.httpVersion} ${call.response.status()}")
+                if (logHeaders) {
+                    call.response.headers.allValues().forEach { header, values ->
+                        appendLine("$header: ${values.firstOrNull()}")
+                    }
                 }
-            }
-            if (logBody && subject is OutgoingContent.ByteArrayContent) {
-                // new line before body as in HTTP response
-                appendln()
-                // new line after body because in the log there might be additional info after "log message"
-                appendln(String(subject.bytes()))
-            }
-            // do not log warning if  subject is not OutgoingContent.ByteArrayContent
-            // as we could possibly spam warnings without any option to disable them
-        }.toString())
+                if (logBody && subject is OutgoingContent.ByteArrayContent) {
+                    // new line before body as in HTTP response
+                    appendLine()
+                    // new line after body because in the log there might be additional info after "log message"
+                    appendLine(String(subject.bytes()))
+                }
+                // do not log warning if  subject is not OutgoingContent.ByteArrayContent
+                // as we could possibly spam warnings without any option to disable them
+            }.toString()
+        )
     }
 
     protected open fun shouldLog(call: ApplicationCall): Boolean {
