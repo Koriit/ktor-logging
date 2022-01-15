@@ -1,5 +1,6 @@
 package com.korrit.kotlin.ktor.features.logging
 
+import ch.qos.logback.classic.Level
 import com.koriit.kotlin.slf4j.logger
 import com.koriit.kotlin.slf4j.mdc.correlation.correlateThread
 import io.ktor.application.call
@@ -29,11 +30,13 @@ import java.util.UUID
 
 internal class LoggingTest {
 
+    private val testLogger = spyk(logger {})
+
     init {
         correlateThread()
+        testLogger as ch.qos.logback.classic.Logger
+        testLogger.level = Level.DEBUG
     }
-
-    private val testLogger = spyk(logger {})
 
     @Test
     fun `Should log request, response and performance`() {
@@ -212,7 +215,6 @@ internal class LoggingTest {
         val response = payloads[1]
         assertTrue(response.contains("200 OK"))
         assertTrue(request.contains("/api?queryParam=true"))
-        assertTrue(response.contains("Content-Length"))
         assertTrue(response.contains("SOME_BODY"))
 
         server.stop(0, 0)
@@ -256,7 +258,6 @@ internal class LoggingTest {
         assertTrue(response.contains("200 OK"))
         assertTrue(request.contains("/api"))
         assertFalse(request.contains("queryParam=true"))
-        assertFalse(response.contains("Content-Length"))
         assertFalse(response.contains("SOME_BODY"))
 
         server.stop(0, 0)

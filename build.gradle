@@ -37,6 +37,8 @@ dependencies {
 
     // TESTING
     testImplementation "io.ktor:ktor-server-test-host:$ktorVersion"
+    testImplementation "io.ktor:ktor-jackson:$ktorVersion"
+    testImplementation "io.ktor:ktor-gson:$ktorVersion"
     testImplementation "io.mockk:mockk:1.12.2"
     testImplementation "com.koriit.kotlin:slf4j-utils-logback:0.4.0"
     testImplementation "org.junit.jupiter:junit-jupiter:5.8.2"

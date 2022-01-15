@@ -13,7 +13,7 @@ import io.ktor.features.CallId
 import io.ktor.features.DoubleReceive
 import io.ktor.features.callId
 import io.ktor.features.origin
-import io.ktor.http.content.OutgoingContent
+import io.ktor.http.charset
 import io.ktor.request.RequestAlreadyConsumedException
 import io.ktor.request.httpMethod
 import io.ktor.request.httpVersion
@@ -22,8 +22,14 @@ import io.ktor.request.receive
 import io.ktor.routing.Route
 import io.ktor.routing.Routing.Feature.RoutingCallStarted
 import io.ktor.util.AttributeKey
+import io.ktor.util.pipeline.PipelineContext
 import io.ktor.util.pipeline.PipelinePhase
+import io.ktor.utils.io.core.readText
+import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import org.slf4j.Logger
+import java.lang.Exception
 
 /**
  * Logging feature. Allows logging performance, requests and responses.
@@ -127,11 +133,13 @@ open class Logging(config: Configuration) {
 
                 if (logBody) {
                     try {
-                        // new line before body as in HTTP request
+                        // empty line before body as in HTTP request
                         appendLine()
                         // have to receive ByteArray for DoubleReceive to work
+                        append(String(call.receive<ByteArray>()))
                         // new line after body because in the log there might be additional info after "log message"
-                        appendLine(String(call.receive<ByteArray>()))
+                        // and we don't want it to be mixed with logged body
+                        appendLine()
                     } catch (e: RequestAlreadyConsumedException) {
                         log.error("Logging payloads requires DoubleReceive feature to be installed with receiveEntireContent=true", e)
                     }
@@ -140,28 +148,64 @@ open class Logging(config: Configuration) {
         )
     }
 
-    protected open fun logResponse(call: ApplicationCall, subject: Any) {
+    protected open suspend fun logResponse(pipeline: PipelineContext<Any, ApplicationCall>): Any {
+        if (logBody) {
+            return logResponseWithBody(pipeline)
+        }
+
+        // Since we are not logging response body we can log immediately and continue pipeline normally
         log.info(
             StringBuilder().apply {
-                appendLine("Sent response:")
-                appendLine("${call.request.httpVersion} ${call.response.status()}")
-                if (logHeaders) {
-                    call.response.headers.allValues().forEach { header, values ->
-                        appendLine("$header: ${values.firstOrNull()}")
-                    }
-                }
-                if (logBody && subject is OutgoingContent.ByteArrayContent) {
-                    // new line before body as in HTTP response
-                    appendLine()
-                    // new line after body because in the log there might be additional info after "log message"
-                    appendLine(String(subject.bytes()))
-                }
-                // do not log warning if  subject is not OutgoingContent.ByteArrayContent
-                // as we could possibly spam warnings without any option to disable them
+                appendResponse(pipeline.call)
             }.toString()
         )
+
+        return pipeline.subject
     }
 
+    /**
+     * To log response payload we need to duplicate response stream
+     * which is why this function returns a new pipeline subject to proceed with.
+     */
+    protected open suspend fun logResponseWithBody(pipeline: PipelineContext<Any, ApplicationCall>): Any {
+        @Suppress("TooGenericExceptionCaught") // intended
+        try {
+            // logging a response body is harder than logging a request body because
+            // there is no public api for observing response body stream or something like DoubleReceive for requests
+            val (observer, observed) = pipeline.observe()
+            val charset = observed.contentType?.charset() ?: Charsets.UTF_8
+            // launch a coroutine that will eventually log the response once it is fully written
+            pipeline.launch(Dispatchers.Unconfined) {
+                val responseBody = observer.readRemaining().readText(charset = charset)
+
+                log.info(
+                    StringBuilder().apply {
+                        appendResponse(pipeline.call)
+                        // empty line before body as in HTTP response
+                        appendLine()
+                        append(responseBody)
+                        // new line after body because in the log there might be additional info after "log message"
+                        // and we don't want it to be mixed with logged body
+                        appendLine()
+                    }.toString()
+                )
+            }
+            return observed
+        } catch (e: Exception) {
+            log.warn(e.message, e)
+            return pipeline.subject
+        }
+    }
+
+    protected open fun StringBuilder.appendResponse(call: ApplicationCall) {
+        appendLine("Sent response:")
+        appendLine("${call.request.httpVersion} ${call.response.status()}")
+        if (logHeaders) {
+            call.response.headers.allValues().forEach { header, values ->
+                appendLine("$header: ${values.firstOrNull()}")
+            }
+        }
+    }
     protected open fun shouldLog(call: ApplicationCall): Boolean {
         return filters.isEmpty() || filters.any { it(call) }
     }
@@ -200,7 +244,7 @@ open class Logging(config: Configuration) {
 
         if (logRequests || logResponses) {
             if (logBody && pipeline.featureOrNull(DoubleReceive) == null) {
-                throw IllegalStateException("Logging payloads requires DoubleReceive feature to be installed")
+                throw IllegalStateException("Logging request payloads requires DoubleReceive feature to be installed")
             }
             if (!logBody && !logHeaders && !logFullUrl) {
                 log.warn("You have enabled logging of requests/responses but body, full url and headers logging is disabled and there is no information gain")
@@ -218,7 +262,7 @@ open class Logging(config: Configuration) {
         if (logResponses) {
             pipeline.sendPipeline.intercept(responseLoggingPhase) {
                 if (shouldLog(call)) {
-                    logResponse(call, subject)
+                    proceedWith(logResponse(this))
                 }
             }
         }
