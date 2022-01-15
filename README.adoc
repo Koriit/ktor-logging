@@ -9,9 +9,9 @@ image:https://img.shields.io/github/license/koriit/ktor-logging[GitHub]
 
 WARNING: From version 0.4.0 all package names have been renamed to match new artifact group id.
 
-Logging feature for ktor server. Allows logging of performance, requests and responses.
+Logging plugin for Ktor server. Allows logging of performance, requests and responses.
 
-The feature correlates call logs and therefore installation of `CallId` is required.
+The plugin correlates call logs and therefore installation of `CallId` is required.
 
 == Installation
 [source,kotlin]
@@ -38,7 +38,7 @@ module {
 You can select which calls you want to log with `filter` and `filterPath` configuration functions.
 
 == Logging payloads
-Logging of request/response payloads requires installation of `DoubleReceive` feature with `receiveEntireContent = true`.
+Logging of request/response payloads requires installation of `DoubleReceive` plugin with `receiveEntireContent = true`.
 
 [WARNING]
 Payloads may contain sensitive data not suitable for logging. That's why this is disabled by default.
@@ -66,7 +66,7 @@ Connection: keep-alive
 ----
 
 == Extending
-Feature is fully open for customizations. You can base on it your own logging feature, which you are encouraged to do.
+Plugin is fully open for customizations. You can base on it your own logging plugin, which you are encouraged to do.
 
 For example with logback's logstash encoder you can enhance your log JSONs like that:
 [source,kotlin]
