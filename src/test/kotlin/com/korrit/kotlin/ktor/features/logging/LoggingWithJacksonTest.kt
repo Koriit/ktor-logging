@@ -22,6 +22,7 @@ import io.ktor.server.testing.handleRequest
 import io.ktor.server.testing.setBody
 import io.mockk.spyk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import java.util.UUID
@@ -53,7 +54,7 @@ internal class LoggingWithJacksonTest {
 
         val reqeust = SampleRequest(field = "value", innerObject = SampleRequest("value2"))
 
-        server.handleRequest(Post, "/api?queryParam=true") {
+        val apiCall = server.handleRequest(Post, "/api?queryParam=true") {
             addHeader("My-Header", "My-Value")
             addHeader("Content-Type", "application/json")
             setBody(jackson.writeValueAsString(reqeust))
@@ -72,17 +73,18 @@ internal class LoggingWithJacksonTest {
             testLogger.info(any(), *anyVararg())
         }
 
-        val request = payloads[0]
-        assertTrue(request.contains("POST"))
-        assertTrue(request.contains("/api?queryParam=true"))
-        assertTrue(request.contains("My-Header"))
-        assertTrue(request.contains("My-Value"))
-        assertTrue(request.contains("""{"field":"value","innerObject":{"field":"value2","innerObject":null}}"""))
+        Assertions.assertEquals("""{"field":"value","innerObject":{"field":"value2","innerObject":null}}""", apiCall.response.content)
 
-        val response = payloads[1]
-        assertTrue(response.contains("200 OK"))
-        assertTrue(request.contains("/api?queryParam=true"))
-        assertTrue(response.contains("""{"field":"value","innerObject":{"field":"value2","innerObject":null}}"""))
+        val loggedRequest = payloads[0]
+        assertTrue(loggedRequest.contains("POST"))
+        assertTrue(loggedRequest.contains("/api?queryParam=true"))
+        assertTrue(loggedRequest.contains("My-Header"))
+        assertTrue(loggedRequest.contains("My-Value"))
+        assertTrue(loggedRequest.contains("""{"field":"value","innerObject":{"field":"value2","innerObject":null}}"""))
+
+        val loggedResponse = payloads[1]
+        assertTrue(loggedResponse.contains("200 OK"))
+        assertTrue(loggedResponse.contains("""{"field":"value","innerObject":{"field":"value2","innerObject":null}}"""))
 
         server.stop(0, 0)
     }

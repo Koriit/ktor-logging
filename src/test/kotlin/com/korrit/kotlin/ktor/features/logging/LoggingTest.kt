@@ -21,6 +21,7 @@ import io.ktor.server.testing.handleRequest
 import io.ktor.server.testing.setBody
 import io.mockk.spyk
 import io.mockk.verify
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
@@ -214,8 +215,44 @@ internal class LoggingTest {
 
         val response = payloads[1]
         assertTrue(response.contains("200 OK"))
-        assertTrue(request.contains("/api?queryParam=true"))
         assertTrue(response.contains("SOME_BODY"))
+
+        server.stop(0, 0)
+    }
+
+    @Test
+    fun `Should log body and return body`() {
+        val server = testServer {
+            logRequests = true
+            logResponses = true
+            logBody = true
+        }
+
+        server.start()
+        val apiCall = server.handleRequest(Post, "/api") {
+            setBody("SOME_BODY")
+        }
+
+        val payloads = mutableListOf<String>()
+
+        verify(exactly = 2) {
+            testLogger.info(
+                withArg {
+                    payloads.add(it)
+                }
+            )
+        }
+
+        assertEquals("SOME_BODY", apiCall.response.content)
+
+        val loggedRequest = payloads[0]
+        assertTrue(loggedRequest.contains("POST"))
+        assertTrue(loggedRequest.contains("/api"))
+        assertTrue(loggedRequest.contains("SOME_BODY"))
+
+        val loggedResponse = payloads[1]
+        assertTrue(loggedResponse.contains("200 OK"))
+        assertTrue(loggedResponse.contains("SOME_BODY"))
 
         server.stop(0, 0)
     }
@@ -256,8 +293,6 @@ internal class LoggingTest {
 
         val response = payloads[1]
         assertTrue(response.contains("200 OK"))
-        assertTrue(request.contains("/api"))
-        assertFalse(request.contains("queryParam=true"))
         assertFalse(response.contains("SOME_BODY"))
 
         server.stop(0, 0)
